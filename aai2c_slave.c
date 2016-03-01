@@ -28,6 +28,8 @@
 //=========================================================================
 #include <stdio.h>
 #include <stdlib.h>
+#include <conio.h>
+#include <windows.h>
 #include "aardvark.h"
 
 
@@ -46,18 +48,123 @@
 //=========================================================================
 static u08 data_in[BUFFER_SIZE];
 
+void testWriteSerialPort(){
+	HANDLE serialHandle;
+	BYTE bybyte;
+	DWORD iBytesWritten=0;
+    DWORD iBytesToRead = 1;
+	DCB serialParams = { 0 };
+	COMMTIMEOUTS timeout = { 0 };
+	
+	serialHandle = CreateFile("\\\\.\\COM14", GENERIC_READ | GENERIC_WRITE, 0, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+
+	// Do some basic settings
+	serialParams.DCBlength = sizeof(serialParams);
+
+	GetCommState(serialHandle, &serialParams);
+	serialParams.BaudRate = 115200;
+	serialParams.ByteSize = 8;
+	serialParams.StopBits = 1;
+	serialParams.Parity = NOPARITY;
+	SetCommState(serialHandle, &serialParams);
+
+	// Set timeouts
+	timeout.ReadIntervalTimeout = 50;
+	timeout.ReadTotalTimeoutConstant = 50;
+	timeout.ReadTotalTimeoutMultiplier = 50;
+	timeout.WriteTotalTimeoutConstant = 50;
+	timeout.WriteTotalTimeoutMultiplier = 10;
+
+	SetCommTimeouts(serialHandle, &timeout);
+	
+	bybyte = 'C';
+
+	if(WriteFile(serialHandle,(LPCVOID) 
+		&bybyte,iBytesToRead,&iBytesWritten,NULL)==0) {
+	}
+	CloseHandle(serialHandle);
+}
+
+void WriteByteToSerialPort(BYTE bSendByte){
+	HANDLE serialHandle;
+	DWORD iBytesWritten=0;
+    DWORD iBytesToRead = 1;
+	DCB serialParams = { 0 };
+	COMMTIMEOUTS timeout = { 0 };
+	
+	serialHandle = CreateFile("\\\\.\\COM14", GENERIC_READ | GENERIC_WRITE, 0, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+
+	// Do some basic settings
+	serialParams.DCBlength = sizeof(serialParams);
+
+	GetCommState(serialHandle, &serialParams);
+	serialParams.BaudRate = 115200;
+	serialParams.ByteSize = 8;
+	serialParams.StopBits = 1;
+	serialParams.Parity = NOPARITY;
+	SetCommState(serialHandle, &serialParams);
+
+	// Set timeouts
+	timeout.ReadIntervalTimeout = 50;
+	timeout.ReadTotalTimeoutConstant = 50;
+	timeout.ReadTotalTimeoutMultiplier = 50;
+	timeout.WriteTotalTimeoutConstant = 50;
+	timeout.WriteTotalTimeoutMultiplier = 10;
+
+	SetCommTimeouts(serialHandle, &timeout);
+	
+	if(WriteFile(serialHandle,(LPCVOID) 
+		&bSendByte,iBytesToRead,&iBytesWritten,NULL)==0) {
+	}
+	CloseHandle(serialHandle);
+}
+
+void WriteStringToSerialPort(BYTE* bSendString, DWORD nLength){
+	HANDLE serialHandle;
+	DWORD iBytesWritten=0;
+    DWORD iBytesToWrite = nLength;
+	DCB serialParams = { 0 };
+	COMMTIMEOUTS timeout = { 0 };
+	
+	serialHandle = CreateFile("\\\\.\\COM14", GENERIC_READ | GENERIC_WRITE, 0, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+
+	// Do some basic settings
+	serialParams.DCBlength = sizeof(serialParams);
+
+	GetCommState(serialHandle, &serialParams);
+	serialParams.BaudRate = 115200;
+	serialParams.ByteSize = 8;
+	serialParams.StopBits = 1;
+	serialParams.Parity = NOPARITY;
+	SetCommState(serialHandle, &serialParams);
+
+	// Set timeouts
+	timeout.ReadIntervalTimeout = 50;
+	timeout.ReadTotalTimeoutConstant = 50;
+	timeout.ReadTotalTimeoutMultiplier = 50;
+	timeout.WriteTotalTimeoutConstant = 50;
+	timeout.WriteTotalTimeoutMultiplier = 10;
+
+	SetCommTimeouts(serialHandle, &timeout);
+	
+	if(WriteFile(serialHandle,(LPCVOID) 
+		bSendString,iBytesToWrite,&iBytesWritten,NULL)==0) {
+	}
+	CloseHandle(serialHandle);
+}
+
 static void dump (Aardvark handle, int timeout_ms)
 {
     int trans_num = 0;
     int result;
     u08 addr;
     
-    printf("Watching slave I2C data...\n");
+    //supress this message because no need. printf("Watching slave I2C data...\n");
 
     // Wait for data on bus
     result = aa_async_poll(handle, timeout_ms);
     if (result == AA_ASYNC_NO_DATA) {
-        printf("No data available.\n");
+        //supress this message because no need. printf("No data available.\n");
         return;
     }
     
@@ -81,6 +188,7 @@ static void dump (Aardvark handle, int timeout_ms)
             }
 
             // Dump the data to the screen
+#if 0
             printf("*** Transaction #%02d\n", trans_num);
             printf("Data read from master:");
             for (i = 0; i < num_bytes; ++i) {
@@ -88,7 +196,16 @@ static void dump (Aardvark handle, int timeout_ms)
                 printf("%02x ", data_in[i] & 0xff);
                 if (((i+1)&0x07) == 0)  printf(" ");
             }
-            printf("\n\n");
+			printf("\n\n");
+#endif
+
+			//printf("Sending to null modem terminal\n");
+			//for(i=2;i<num_bytes;i++) {	//Skip the first byte
+			//	WriteByteToSerialPort( data_in[i]&0xFF );
+			//}
+			if( num_bytes > 2 )
+				WriteStringToSerialPort(&data_in[2], num_bytes-2);
+			//printf("\n\n");
         }
         
         else if (result == AA_ASYNC_I2C_WRITE) {
@@ -124,6 +241,12 @@ static void dump (Aardvark handle, int timeout_ms)
 }
 
 
+int getch_noblock() {
+    if (_kbhit())
+        return _getch();
+    else
+        return -1;
+}
 
 //=========================================================================
 // MAIN PROGRAM
@@ -137,7 +260,7 @@ int main (int argc, char *argv[]) {
     
     u08 slave_resp[SLAVE_RESP_SIZE];
     int i;
-
+	/*
     if (argc < 4) {
         printf("usage: aai2c_slave PORT SLAVE_ADDR TIMEOUT_MS\n");
         printf("  SLAVE_ADDR is the slave address for this device\n");
@@ -148,10 +271,16 @@ int main (int argc, char *argv[]) {
         printf("  block indefinitely.\n");
         return 1;
     }
-
+	*/
+/*
     port       = atoi(argv[1]);
     addr       = (u08)strtol(argv[2], 0, 0);
     timeout_ms = atoi(argv[3]);
+*/
+
+	port    = 0;	//atoi(argv[1]);
+    addr    = 0x08;	//(u08)strtol(argv[5], 0, 0);
+    timeout_ms  = 1*1000;	//atoi(argv[6]);
 
     // Open the device
     handle = aa_open(port);
@@ -174,15 +303,19 @@ int main (int argc, char *argv[]) {
     for (i=0; i<SLAVE_RESP_SIZE; ++i)
         slave_resp[i] = 'A' + i;
 
-    aa_i2c_slave_set_response(handle, SLAVE_RESP_SIZE, slave_resp);
+    //No response: aa_i2c_slave_set_response(handle, SLAVE_RESP_SIZE, slave_resp);
+	aa_i2c_slave_set_response(handle, 0, NULL);
+
 
     // Enable the slave
     aa_i2c_slave_enable(handle, addr, 0, 0);
-
-    // Watch the I2C port
-    dump(handle, timeout_ms);
-
-    // Disable the slave and close the device
+	// Watch the I2C port
+	printf("Press 'q' to exit the program!!! \n");
+	
+    do {
+		dump(handle, timeout_ms);
+	} while(getch_noblock() != 'q' );
+	// Disable the slave and close the device
     aa_i2c_slave_disable(handle);
     aa_close(handle);
 
